@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from . import models, database
 from datetime import datetime, timedelta
 import hmac
-import hashli
+import hashlib
 import urllib.parse
 import os
 from dotenv import load_dotenv
@@ -168,3 +168,7 @@ def get_map(db: Session = Depends(database.get_db)):
         {"id": c.id, "name": c.name, "x": c.x, "y": c.y}
         for c in cities
     ]
+
+# Подключаем раздачу статики (frontend)
+from fastapi.staticfiles import StaticFiles
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
