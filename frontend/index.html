@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CityState - Твой средневековый город</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Ресурсы -->
+        <header class="resource-bar">
+            <div class="res-item" title="Золото"><span class="icon">💰</span> <span id="gold">0</span></div>
+            <div class="res-item" title="Еда"><span class="icon">🍞</span> <span id="food">0</span></div>
+            <div class="res-item" title="Камень"><span class="icon">🪨</span> <span id="stone">0</span></div>
+            <div class="res-item" title="Население"><span class="icon">👥</span> <span id="population">0</span></div>
+        </header>
+
+        <!-- Главный экран города -->
+        <main id="city-view" class="active">
+            <div class="city-grid" id="grid">
+                <!-- Клетки города 10x10 -->
+            </div>
+        </main>
+
+        <!-- Карта мира -->
+        <section id="map-view" class="hidden">
+            <div id="world-map"></div>
+        </section>
+
+        <!-- Навигация -->
+        <nav class="bottom-nav">
+            <button onclick="showView('city')">🏰 Город</button>
+            <button onclick="showView('map')">🗺️ Карта</button>
+            <button onclick="showView('build')">🏗️ Строить</button>
+            <button onclick="showView('troops')">⚔️ Армия</button>
+        </nav>
+    </div>
+
+    <!-- Модальное окно строительства -->
+    <div id="build-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Что построим?</h3>
+            <div class="build-list">
+                <div class="build-option" onclick="build('FARM')">🌾 Ферма (бесплатно)</div>
+                <div class="build-option" onclick="build('MINE')">⚒️ Шахта (100💰)</div>
+                <div class="build-option" onclick="build('MINT')">🏦 Монетный двор (500💰)</div>
+            </div>
+            <button onclick="closeModal()">Закрыть</button>
+        </div>
+    </div>
+
+    <script src="map.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
