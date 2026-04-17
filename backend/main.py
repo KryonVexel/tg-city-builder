@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, database
 from datetime import datetime, timedelta
@@ -6,6 +7,7 @@ import hmac
 import hashlib
 import urllib.parse
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,36 +16,64 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 app = FastAPI(title="CityState API")
 
-# Initialize DB on startup
+# CORS middleware for local testing
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 def startup():
     database.init_db()
 
-# --- Auth Helper ---
 def verify_telegram_auth(init_data: str):
     """Verifies Telegram Mini App initData"""
     if not init_data:
         raise HTTPException(status_code=401, detail="Missing initData")
     
-    # Implementation of validation logic as per Telegram docs
-    # For now, we return a mock user ID for development
+    # Dev mode fallback
+    if init_data == "user=%7B%22id%22%3A12345%2C%22first_name%22%3A%22Dev%22%7D":
+        return 12345
+        
+    if not BOT_TOKEN:
+        try:
+            parsed = dict(urllib.parse.parse_qsl(init_data))
+            user_data = json.loads(parsed.get("user", "{}"))
+            return user_data.get("id", 12345)
+        except:
+            raise HTTPException(status_code=401, detail="Invalid initData")
+            
     try:
         parsed_data = dict(urllib.parse.parse_qsl(init_data))
-        # Actual validation would go here
-        import json
+        hash_val = parsed_data.pop("hash", None)
+        if not hash_val:
+            raise ValueError()
+
+        data_check_string = "\n".join(
+            f"{k}={v}" for k, v in sorted(parsed_data.items())
+        )
+        secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+        if calculated_hash != hash_val:
+            raise ValueError()
+            
         user_data = json.loads(parsed_data.get("user", "{}"))
         return user_data.get("id")
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid initData")
+        raise HTTPException(status_code=401, detail="Invalid initData Signature")
 
-# --- Game Logic Helpers ---
 def calculate_resources(city: models.City, db: Session):
-    """Updates resources based on time elapsed since last tick/action"""
+    """Updates resources based on time elapsed since last tick"""
     now = datetime.utcnow()
     
     for building in city.buildings:
         hours_passed = (now - building.last_tick).total_seconds() / 3600.0
-        if hours_passed >= 1.0:
+        # Give resources if at least 30 seconds have passed (0.0083 hours)
+        if hours_passed >= 0.0083:
             if building.type == "FARM":
                 city.food += building.level * 10 * hours_passed
             elif building.type == "MINE":
@@ -53,22 +83,7 @@ def calculate_resources(city: models.City, db: Session):
             
             building.last_tick = now
     
-    # Population health check
-    if city.food <= 0 or city.water <= 0:
-        city.health = max(0, city.health - 1.0)
-    
-    # Tax Check (handled separately or on first login of the day)
-    days_since_tax = (now - city.tax_last_collected).days
-    if days_since_tax >= 1:
-        # 1 coin per 16x16 square owned
-        # For now, let's assume city owns 1 square by default
-        tax_amount = 1.0 * days_since_tax
-        city.gold -= tax_amount
-        city.tax_last_collected = now
-        
     db.commit()
-
-# --- API Endpoints ---
 
 @app.get("/city")
 def get_city(init_data: str = Header(None), db: Session = Depends(database.get_db)):
@@ -76,7 +91,6 @@ def get_city(init_data: str = Header(None), db: Session = Depends(database.get_d
     user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
     
     if not user:
-        # Auto-registration for dev
         user = models.User(telegram_id=tg_id)
         db.add(user)
         db.commit()
@@ -110,7 +124,11 @@ def create_city(name: str, x: int, y: int, init_data: str = Header(None), db: Se
     tg_id = verify_telegram_auth(init_data)
     user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
     
-    # Check if city at x,y is taken
+    if not user:
+        user = models.User(telegram_id=tg_id)
+        db.add(user)
+        db.commit()
+
     existing = db.query(models.City).filter(models.City.x == x, models.City.y == y).first()
     if existing:
         raise HTTPException(status_code=400, detail="Tile occupied")
@@ -122,8 +140,8 @@ def create_city(name: str, x: int, y: int, init_data: str = Header(None), db: Se
     member = models.CityMember(user_id=user.id, city_id=new_city.id, role="MAYOR")
     db.add(member)
     
-    # Initial buildings
-    farm = models.Building(city_id=new_city.id, type="FARM", grid_x=0, grid_y=0)
+    # Place initial building in the center
+    farm = models.Building(city_id=new_city.id, type="FARM", grid_x=4, grid_y=4)
     db.add(farm)
     
     db.commit()
@@ -133,21 +151,24 @@ def create_city(name: str, x: int, y: int, init_data: str = Header(None), db: Se
 def build_building(type: str, x: int, y: int, init_data: str = Header(None), db: Session = Depends(database.get_db)):
     tg_id = verify_telegram_auth(init_data)
     user = db.query(models.User).filter(models.User.telegram_id == tg_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+        
     membership = db.query(models.CityMember).filter(models.CityMember.user_id == user.id).first()
     
     if not membership:
         raise HTTPException(status_code=400, detail="No city")
     
     city = membership.city
+    calculate_resources(city, db)
     
-    # Check if tile occupied in city grid (0-9 range)
     existing = db.query(models.Building).filter(models.Building.city_id == city.id, 
                                                models.Building.grid_x == x, 
                                                models.Building.grid_y == y).first()
     if existing:
         raise HTTPException(status_code=400, detail="Building already there")
         
-    # Cost check
     costs = {"FARM": 0, "MINE": 100, "MINT": 500, "HOUSE": 50}
     cost = costs.get(type, 0)
     
@@ -155,6 +176,9 @@ def build_building(type: str, x: int, y: int, init_data: str = Header(None), db:
         raise HTTPException(status_code=400, detail="Not enough gold")
         
     city.gold -= cost
+    if type == "HOUSE":
+        city.population += 5
+        
     new_building = models.Building(city_id=city.id, type=type, grid_x=x, grid_y=y)
     db.add(new_building)
     db.commit()
@@ -169,6 +193,6 @@ def get_map(db: Session = Depends(database.get_db)):
         for c in cities
     ]
 
-# Подключаем раздачу статики (frontend)
+# Serve frontend static files
 from fastapi.staticfiles import StaticFiles
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

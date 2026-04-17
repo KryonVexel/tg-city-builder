@@ -4,50 +4,139 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CityState - Твой средневековый город</title>
+    <!-- Подключение шрифтов Google Fonts для премиального вида -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="app">
         <!-- Ресурсы -->
-        <header class="resource-bar">
-            <div class="res-item" title="Золото"><span class="icon">💰</span> <span id="gold">0</span></div>
-            <div class="res-item" title="Еда"><span class="icon">🍞</span> <span id="food">0</span></div>
-            <div class="res-item" title="Камень"><span class="icon">🪨</span> <span id="stone">0</span></div>
-            <div class="res-item" title="Население"><span class="icon">👥</span> <span id="population">0</span></div>
+        <header class="resource-bar glass">
+            <div class="res-item" title="Золото">
+                <span class="icon">💰</span> 
+                <div class="res-info">
+                    <span class="res-label">Золото</span>
+                    <span id="gold" class="res-value">0</span>
+                </div>
+            </div>
+            <div class="res-item" title="Еда">
+                <span class="icon">🍞</span> 
+                <div class="res-info">
+                    <span class="res-label">Еда</span>
+                    <span id="food" class="res-value">0</span>
+                </div>
+            </div>
+            <div class="res-item" title="Камень">
+                <span class="icon">🪨</span> 
+                <div class="res-info">
+                    <span class="res-label">Камень</span>
+                    <span id="stone" class="res-value">0</span>
+                </div>
+            </div>
+            <div class="res-item" title="Население">
+                <span class="icon">👥</span> 
+                <div class="res-info">
+                    <span class="res-label">Жители</span>
+                    <span id="population" class="res-value">0</span>
+                </div>
+            </div>
         </header>
 
         <!-- Главный экран города -->
-        <main id="city-view" class="active">
-            <div class="city-grid" id="grid">
-                <!-- Клетки города 10x10 -->
+        <main id="city-view" class="view active">
+            <div class="city-wrapper">
+                <div class="city-grid" id="grid">
+                    <!-- Клетки города 10x10 будут добавлены через JS -->
+                </div>
             </div>
         </main>
 
         <!-- Карта мира -->
-        <section id="map-view" class="hidden">
-            <div id="world-map"></div>
+        <section id="map-view" class="view hidden">
+            <div class="placeholder-content">
+                <h2>Карта Мира</h2>
+                <p>Исследование новых земель скоро будет доступно...</p>
+                <div class="map-icon">🗺️</div>
+            </div>
+        </section>
+
+        <!-- Армия -->
+        <section id="troops-view" class="view hidden">
+            <div class="placeholder-content">
+                <h2>Казармы</h2>
+                <p>Тренировка войск и походы скоро будут доступны...</p>
+                <div class="map-icon">⚔️</div>
+            </div>
         </section>
 
         <!-- Навигация -->
-        <nav class="bottom-nav">
-            <button onclick="showView('city')">🏰 Город</button>
-            <button onclick="showView('map')">🗺️ Карта</button>
-            <button onclick="showView('build')">🏗️ Строить</button>
-            <button onclick="showView('troops')">⚔️ Армия</button>
+        <nav class="bottom-nav glass">
+            <button class="nav-btn active" onclick="showView('city', this)">
+                <span class="nav-icon">🏰</span>
+                <span class="nav-text">Город</span>
+            </button>
+            <button class="nav-btn" onclick="showView('map', this)">
+                <span class="nav-icon">🗺️</span>
+                <span class="nav-text">Карта</span>
+            </button>
+            <button class="nav-btn build-btn" onclick="openBuildModal()">
+                <div class="build-icon-wrapper">
+                    <span class="nav-icon">🏗️</span>
+                </div>
+                <span class="nav-text">Строить</span>
+            </button>
+            <button class="nav-btn" onclick="showView('troops', this)">
+                <span class="nav-icon">⚔️</span>
+                <span class="nav-text">Армия</span>
+            </button>
         </nav>
     </div>
 
+    <!-- Оверлей для размытия -->
+    <div id="overlay" class="overlay hidden" onclick="closeModal()"></div>
+
     <!-- Модальное окно строительства -->
     <div id="build-modal" class="modal hidden">
-        <div class="modal-content">
+        <div class="modal-header">
             <h3>Что построим?</h3>
-            <div class="build-list">
-                <div class="build-option" onclick="build('FARM')">🌾 Ферма (бесплатно)</div>
-                <div class="build-option" onclick="build('MINE')">⚒️ Шахта (100💰)</div>
-                <div class="build-option" onclick="build('MINT')">🏦 Монетный двор (500💰)</div>
+            <button class="close-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="build-list">
+            <div class="build-option" onclick="build('FARM')">
+                <div class="build-icon">🌾</div>
+                <div class="build-details">
+                    <h4>Ферма</h4>
+                    <p>Добывает еду (+10/ч)</p>
+                </div>
+                <div class="build-cost free">Бесплатно</div>
             </div>
-            <button onclick="closeModal()">Закрыть</button>
+            <div class="build-option" onclick="build('MINE')">
+                <div class="build-icon">⚒️</div>
+                <div class="build-details">
+                    <h4>Шахта</h4>
+                    <p>Добывает камень (+5/ч)</p>
+                </div>
+                <div class="build-cost">100 💰</div>
+            </div>
+            <div class="build-option" onclick="build('MINT')">
+                <div class="build-icon">🏦</div>
+                <div class="build-details">
+                    <h4>Монетный двор</h4>
+                    <p>Чеканит монеты (+50/ч)</p>
+                </div>
+                <div class="build-cost">500 💰</div>
+            </div>
+            <div class="build-option" onclick="build('HOUSE')">
+                <div class="build-icon">🏠</div>
+                <div class="build-details">
+                    <h4>Дом</h4>
+                    <p>Увеличивает население</p>
+                </div>
+                <div class="build-cost">50 💰</div>
+            </div>
         </div>
     </div>
 
